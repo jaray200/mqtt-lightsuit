@@ -1,11 +1,23 @@
+firstname = 'Jason'
+lastname = 'Ray'
+idnumber = '1'
+ssid = 'NESsy'
+pw = 'g1r4ff3s'
+client_id = f"{firstname}_{lastname}_{idnumber}"
+topic_id = client_id.lower()
+subtopic = f"lightsuit/{topic_id}/state"
+pubtopic = f"lightsuit/{topic_id}/status"
+mqtt_username = 'mqtt-user'
+mqtt_key = '@1phabeta'
+
 secrets = {
-    'ssid': 'NESsy',
-    'pw': 'g1r4ff3s',
-    'mqtt_username' : 'mqtt-user',
-    'mqtt_key' : '@1phabeta',
+    'ssid': ssid,
+    'pw': pw,
+    'mqtt_username' : mqtt_username,
+    'mqtt_key' : mqtt_key,
     'brokerip' : '192.168.1.22',
     'brokerport' : 1883,
-    'client_id' : 'Jason_Ray_2',
-    'subtopic' : b'lightsuit/jason_ray_2/state',
-    'pubtopic' : b'lightsuit/jason_ray_2/status'
+    'client_id' : client_id,
+    'subtopic' : bytes(subtopic, 'utf8'),
+    'pubtopic' : bytes(pubtopic, 'utf8')
     }
