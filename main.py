@@ -8,30 +8,43 @@ from secrets import secrets
 import socket
 from umqtt.simple import MQTTClient
 from machine import Pin
+import random
 
 def sub_cb(topic, msg):
     print((topic, msg))
+    global LED_MODE, LED_STATE
+    if msg == b'Solid':
+        print("Solid Received")
+        LED_MODE = 0
+        print(str(LED_MODE))
+    if msg == b'Flicker':
+        print("Flicker Received")
+        LED_MODE = 1
+        print(str(LED_MODE))
     if msg == b'On':
         print('Device received On message on subscribed topic')
+        LED_STATE = 1
         led.value(1)
         run_lights()
     if msg == b'Off':
         print('Device received Off message on subscribed topic')
+        LED_STATE = 0
         led.value(0)
         lights_off()
-        sm.restart()
+        sm_ledbranch1.restart()
+#         sm_ledbranch2.restart()
 
 
 def connect_and_subscribe():
-    print("1")
     global client_id, mqtt_server, topic_sub
     
     #client = MQTTClient(client_id, brokerip)
-    client = MQTTClient(client_id, brokerip, brokerport, brokerusername, brokerpassword)
+    client = MQTTClient(client_id, brokerip, brokerport, brokerusername, brokerpassword, keepalive=30)
     client.set_callback(sub_cb)
     client.connect()
-    client.subscribe(sub_topic)
-    print('Connected to %s MQTT broker as client ID: %s, subscribed to %s topic' % (brokerip, client_id, sub_topic))
+    client.subscribe(sub_topic1)
+    client.subscribe(sub_topic2)
+    #print('Connected to %s MQTT broker as client ID: %s, subscribed to %s topic' % (brokerip, client_id, sub_topic1))
     return client
 
 def restart_and_reconnect():
@@ -39,87 +52,108 @@ def restart_and_reconnect():
   time.sleep(10)
   machine.reset()
   
-def pixels_show():
-    dimmer_ar = array.array("I", [0 for _ in range(NUM_LEDS)])
-    for i,c in enumerate(ar):
-        r = int(((c >> 8) & 0xFF) * brightness)
-        g = int(((c >> 16) & 0xFF) * brightness)
-        b = int((c & 0xFF) * brightness)
-        dimmer_ar[i] = (g<<16) + (r<<8) + b
-    sm.put(dimmer_ar, 8)
+def pixels_show(speed,brightness):
+    print(str(brightness))
+    global NUM_LEDBRANCH1, ar_ledbranch1, ar_flicker, sm_ledbranch1
+    dimmer_ar_ledbranch1 = array.array("I", [0 for _ in range(NUM_LEDBRANCH1)])
+#     dimmer_ar_ledbranch2 = array.array("I", [0 for _ in range(NUM_LEDBRANCH2)])
+    if LED_MODE == 1:
+        for i,c in enumerate(ar_ledbranch1):
+            if ar_flicker[i] == 1:
+                r = int(((c >> 8) & 0xFF) * (speed*brightness))
+                g = int(((c >> 16) & 0xFF) * (speed*brightness))
+                b = int((c & 0xFF) * (speed*brightness))
+                dimmer_ar_ledbranch1[i] = (g<<16) + (r<<8) + b
+            else:
+                r = int(((c >> 8) & 0xFF)* (brightness))
+                g = int(((c >> 16) & 0xFF) * (brightness))
+                b = int((c & 0xFF) * (brightness))
+                dimmer_ar_ledbranch1[i] = (g<<16) + (r<<8) + b
+        sm_ledbranch1.put(dimmer_ar_ledbranch1, 8)
+    else:
+        for i,c in enumerate(ar_ledbranch1):
+            r = int(((c >> 8) & 0xFF)* (speed*brightness))
+            g = int(((c >> 16) & 0xFF) * (speed*brightness))
+            b = int((c & 0xFF) * (speed*brightness))
+            dimmer_ar_ledbranch1[i] = (g<<16) + (r<<8) + b
+        sm_ledbranch1.put(dimmer_ar_ledbranch1, 8)
+#     for i,c in enumerate(ar_ledbranch2):
+#         r = int(((c >> 8) & 0xFF) * bright)
+#         g = int(((c >> 16) & 0xFF) * bright)
+#         b = int((c & 0xFF) * bright)
+#         dimmer_ar_ledbranch2[i] = (g<<16) + (r<<8) + b
+#     sm_ledbranch2.put(dimmer_ar_ledbranch2, 8)
     time.sleep_ms(10)
 
-def pixels_set(i, color):
-    ar[i] = (color[1]<<16) + (color[0]<<8) + color[2]
+def pixels_set(color):
+    ar_temp = (color[1]<<16) + (color[0]<<8) + color[2]
+    return int(ar_temp)
 
 def pixels_fill(color):
-    for i in range(len(ar)):
-        pixels_set(i, color)
-
-def color_chase(color, wait):
-    for i in range(NUM_LEDS):
-        pixels_set(i, color)
-        time.sleep(wait)
-        pixels_show()
-    time.sleep(0.2)
- 
-def wheel(pos):
-    # Input a value 0 to 255 to get a color value.
-    # The colours are a transition r - g - b - back to r.
-    if pos < 0 or pos > 255:
-        return (0, 0, 0)
-    if pos < 85:
-        return (255 - pos * 3, pos * 3, 0)
-    if pos < 170:
-        pos -= 85
-        return (0, 255 - pos * 3, pos * 3)
-    pos -= 170
-    return (pos * 3, 0, 255 - pos * 3)
- 
- 
-def rainbow_cycle(wait):
-    for j in range(255):
-        for i in range(NUM_LEDS):
-            rc_index = (i * 256 // NUM_LEDS) + j
-            pixels_set(i, wheel(rc_index & 255))
-        pixels_show()
-        time.sleep(wait)
+    global ar_ledbranch1
+    for i in range(len(ar_ledbranch1)):
+        ar_ledbranch1[i] = pixels_set(color)
         
+#     for j in range(len(ar_ledbranch2)):
+#         ar_ledbranch2[j] = pixels_set(color)
+
+
+    
+def color_brighten(color, speed, brightness):
+    print("Brightening")
+    pixels_fill(color)
+    for i in range(speed):
+        pixels_show((i/speed),brightness)
+def color_dim(color, speed, brightness):
+    print("Dimming")
+    pixels_fill(color)
+    for i in range(speed,0,-1):
+        pixels_show((i/speed),brightness)
+
+def flicker_state(ledbranch):
+    return array.array("I", [random.randint(0,1) for _ in range(ledbranch)])
+
+def flicker_lights():
+    global ar_flicker
+    ar_flicker = flicker_state(NUM_LEDBRANCH1)
+    color_dim(WHITE,100,.1)
+    time.sleep(0.2)
+    color_brighten(WHITE,100,.1)
+    time.sleep(0.2)
+
 def run_lights():
-    BLACK = (0, 0, 0)
-    RED = (255, 0, 0)
-    YELLOW = (255, 150, 0)
-    GREEN = (0, 255, 0)
-    CYAN = (0, 255, 255)
-    BLUE = (0, 0, 255)
-    PURPLE = (180, 0, 255)
-    WHITE = (255, 255, 255)
-    COLORS = (BLACK, RED, YELLOW, GREEN, CYAN, BLUE, PURPLE, WHITE)
+    ar_flicker = array.array("I", [1 for _ in range(NUM_LEDBRANCH1)])
+    color_brighten(WHITE,100,.1)
+    time.sleep(0.2)
 
-    print("fills")
-    for color in COLORS:       
-        pixels_fill(color)
-        pixels_show()
-        time.sleep(0.2)
-
-    print("chases")
-    for color in COLORS:       
-        color_chase(color, 0.01)
-
-    print("rainbow")
-    rainbow_cycle(0)
     
 def lights_off():
-    pixels_fill((0,0,0))
-    pixels_show()
+    ar_flicker = array.array("I", [0 for _ in range(NUM_LEDBRANCH1)])
+    pixels_fill(BLACK)
+    pixels_show(1,1)
+    LED_STATE = 0
 
 # Configure the number of WS2812 LEDs.
-NUM_LEDS = 1
-PIN_NUM = 22
-brightness = 0.2
+# LED_MODE 0=Solid, 1 = Flicker
+LED_MODE = 0
+#LED_STATE 0=Off, 1=On
+LED_STATE = 0
+NUM_LEDBRANCH1 = 12
+#NUM_LEDBRANCH2 = 12
+PIN_LEDBRANCH1 = 22
+#PIN_LEDBRANCH2 = 22
+
+BLACK = (0, 0, 0)
+RED = (255, 0, 0)
+YELLOW = (255, 150, 0)
+GREEN = (0, 255, 0)
+CYAN = (0, 255, 255)
+BLUE = (0, 0, 255)
+PURPLE = (180, 0, 255)
+WHITE = (255, 255, 255)
 
 last_message = 0
-message_interval = 5
+message_interval = 2
 counter = 0
 
 @rp2.asm_pio(sideset_init=rp2.PIO.OUT_LOW, out_shiftdir=rp2.PIO.SHIFT_LEFT, autopull=True, pull_thresh=24)
@@ -138,11 +172,15 @@ def ws2812():
 
 
 # Create the StateMachine with the ws2812 program, outputting on pin
-sm = rp2.StateMachine(0, ws2812, freq=8_000_000, sideset_base=Pin(PIN_NUM))
+sm_ledbranch1 = rp2.StateMachine(0, ws2812, freq=8_000_000, sideset_base=Pin(PIN_LEDBRANCH1))
+#sm_ledbranch2 = rp2.StateMachine(1, ws2812, freq=8_000_000, sideset_base=Pin(PIN_LEDBRANCH2))
 
 # Start the StateMachine, it will wait for data on its FIFO.
-sm.active(1)
-ar = array.array("I", [0 for _ in range(NUM_LEDS)])
+sm_ledbranch1.active(1)
+#sm_ledbranch2.active(1)
+ar_ledbranch1 = array.array("I", [0 for _ in range(NUM_LEDBRANCH1)])
+ar_flicker = array.array("I", [0 for _ in range(NUM_LEDBRANCH1)])
+#ar_ledbranch2 = array.array("I", [0 for _ in range(NUM_LEDBRANCH2)])
 lights_off()
 
 
@@ -173,7 +211,8 @@ brokerusername = secrets['mqtt_username']
 brokerpassword = secrets['mqtt_key']
 brokerip = secrets['brokerip']
 brokerport = secrets['brokerport']
-sub_topic = secrets['subtopic']
+sub_topic1 = secrets['subtopic1']
+sub_topic2 = secrets['subtopic2']
 pub_topic = secrets['pubtopic']
 #client_id = ubinascii.hexlify(machine.unique_id())
 #client_id = mac
@@ -216,19 +255,29 @@ else:
 
 
 try:
-  client = connect_and_subscribe()
+    client = connect_and_subscribe()
 except OSError as e:
-  restart_and_reconnect()
+    restart_and_reconnect()
   
 
 
 while True:
-  try:
-    client.check_msg()
-    if (time.time() - last_message) > message_interval:
-      pub_msg = b'Hello #%d' % counter
-      client.publish(pub_topic, pub_msg)
-      last_message = time.time()
-      counter += 1
-  except OSError as e:
-    restart_and_reconnect()
+    try:
+        client.check_msg()
+        if (time.time() - last_message) > message_interval:
+            pub_msg = b'Hello #%d' % counter
+            client.publish(pub_topic, pub_msg)
+            last_message = time.time()
+            counter += 1
+            print(str(LED_MODE))
+        
+            if LED_STATE == 1 and LED_MODE == 1:
+                print("hello i am flicker")
+                flicker_lights()
+            if LED_STATE == 1 and LED_MODE == 0:
+                print("hello i am solid")
+    except OSError as e:
+        restart_and_reconnect()
+
+    
+        

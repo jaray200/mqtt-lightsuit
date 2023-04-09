@@ -1,6 +1,6 @@
-firstname = 'Whitney'
-lastname = 'Southam'
-idnumber = '2'
+firstname = 'Jason'
+lastname = 'Ray'
+idnumber = 'Test'
 ssidhome = 'NESsy'
 pwhome = 'g1r4ff3s'
 ssidnwr = 'Nebula'
@@ -15,8 +15,8 @@ mqtt_username = 'mqtt-user'
 mqtt_key = '@1phabeta'
 
 secrets = {
-    'ssid': ssidnwr,
-    'pw': pwnwr,
+    'ssid': ssidhome,
+    'pw': pwhome,
     'mqtt_username' : mqtt_username,
     'mqtt_key' : mqtt_key,
     'brokerip' : brokeriphome,
