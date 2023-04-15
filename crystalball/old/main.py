@@ -16,25 +16,23 @@ def sub_cb(topic, msg):
     if msg == b'Solid':
         print("Solid Received")
         LED_MODE = 0
-        solid_lights()
+        print(str(LED_MODE))
     if msg == b'Flicker':
         print("Flicker Received")
         LED_MODE = 1
-        flicker_lights()
+        print(str(LED_MODE))
     if msg == b'On':
         print('Device received On message on subscribed topic')
         LED_STATE = 1
         led.value(1)
-        if LED_MODE == 0:
-            solid_lights()
-        if LED_MODE == 1:
-            flicker_lights()
+        run_lights()
     if msg == b'Off':
         print('Device received Off message on subscribed topic')
         LED_STATE = 0
         led.value(0)
         lights_off()
         sm_ledbranch1.restart()
+#         sm_ledbranch2.restart()
 
 
 def connect_and_subscribe():
@@ -55,12 +53,13 @@ def restart_and_reconnect():
   machine.reset()
   
 def pixels_show(speed,brightness):
-    global NUM_LEDBRANCH1, ar_ledbranch1, ar_flicker1, sm_ledbranch1
+    print(str(brightness))
+    global NUM_LEDBRANCH1, ar_ledbranch1, ar_flicker, sm_ledbranch1
     dimmer_ar_ledbranch1 = array.array("I", [0 for _ in range(NUM_LEDBRANCH1)])
-    if LED_MODE == 1 and LED_STATE == 1:
-        print("Flicker Mode")
+#     dimmer_ar_ledbranch2 = array.array("I", [0 for _ in range(NUM_LEDBRANCH2)])
+    if LED_MODE == 1:
         for i,c in enumerate(ar_ledbranch1):
-            if ar_flicker1[i] == 1:
+            if ar_flicker[i] == 1:
                 r = int(((c >> 8) & 0xFF) * (speed*brightness))
                 g = int(((c >> 16) & 0xFF) * (speed*brightness))
                 b = int((c & 0xFF) * (speed*brightness))
@@ -69,16 +68,21 @@ def pixels_show(speed,brightness):
                 r = int(((c >> 8) & 0xFF)* (brightness))
                 g = int(((c >> 16) & 0xFF) * (brightness))
                 b = int((c & 0xFF) * (brightness))
-                dimmer_ar_ledbranch1[i] = (g<<16) + (r<<8) + b  
-
-    if LED_MODE == 0 and LED_STATE == 1:
-        print("Solid Mode")
+                dimmer_ar_ledbranch1[i] = (g<<16) + (r<<8) + b
+        sm_ledbranch1.put(dimmer_ar_ledbranch1, 8)
+    else:
         for i,c in enumerate(ar_ledbranch1):
             r = int(((c >> 8) & 0xFF)* (speed*brightness))
             g = int(((c >> 16) & 0xFF) * (speed*brightness))
             b = int((c & 0xFF) * (speed*brightness))
             dimmer_ar_ledbranch1[i] = (g<<16) + (r<<8) + b
-    sm_ledbranch1.put(dimmer_ar_ledbranch1, 8)
+        sm_ledbranch1.put(dimmer_ar_ledbranch1, 8)
+#     for i,c in enumerate(ar_ledbranch2):
+#         r = int(((c >> 8) & 0xFF) * bright)
+#         g = int(((c >> 16) & 0xFF) * bright)
+#         b = int((c & 0xFF) * bright)
+#         dimmer_ar_ledbranch2[i] = (g<<16) + (r<<8) + b
+#     sm_ledbranch2.put(dimmer_ar_ledbranch2, 8)
     time.sleep_ms(10)
 
 def pixels_set(color):
@@ -89,15 +93,19 @@ def pixels_fill(color):
     global ar_ledbranch1
     for i in range(len(ar_ledbranch1)):
         ar_ledbranch1[i] = pixels_set(color)
+        
+#     for j in range(len(ar_ledbranch2)):
+#         ar_ledbranch2[j] = pixels_set(color)
 
 
     
 def color_brighten(color, speed, brightness):
+    print("Brightening")
     pixels_fill(color)
     for i in range(speed):
         pixels_show((i/speed),brightness)
-        
 def color_dim(color, speed, brightness):
+    print("Dimming")
     pixels_fill(color)
     for i in range(speed,0,-1):
         pixels_show((i/speed),brightness)
@@ -106,19 +114,24 @@ def flicker_state(ledbranch):
     return array.array("I", [random.randint(0,1) for _ in range(ledbranch)])
 
 def flicker_lights():
-    global ar_flicker1
-    ar_flicker1 = flicker_state(NUM_LEDBRANCH1)
-    color_dim(PURPLE,10,1)
-    color_brighten(PURPLE,10,1)
+    global ar_flicker
+    ar_flicker = flicker_state(NUM_LEDBRANCH1)
+    color_dim(WHITE,100,.1)
+    time.sleep(0.2)
+    color_brighten(WHITE,100,.1)
+    time.sleep(0.2)
 
-def solid_lights():
-    color_brighten(PURPLE,100,1)
+def run_lights():
+    ar_flicker = array.array("I", [1 for _ in range(NUM_LEDBRANCH1)])
+    color_brighten(WHITE,100,.1)
     time.sleep(0.2)
 
     
 def lights_off():
-    color_dim(PURPLE,100,1)
-    time.sleep(0.2)
+    ar_flicker = array.array("I", [0 for _ in range(NUM_LEDBRANCH1)])
+    pixels_fill(BLACK)
+    pixels_show(1,1)
+    LED_STATE = 0
 
 # Configure the number of WS2812 LEDs.
 # LED_MODE 0=Solid, 1 = Flicker
@@ -126,7 +139,9 @@ LED_MODE = 0
 #LED_STATE 0=Off, 1=On
 LED_STATE = 0
 NUM_LEDBRANCH1 = 12
+#NUM_LEDBRANCH2 = 12
 PIN_LEDBRANCH1 = 22
+#PIN_LEDBRANCH2 = 22
 
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
@@ -158,12 +173,14 @@ def ws2812():
 
 # Create the StateMachine with the ws2812 program, outputting on pin
 sm_ledbranch1 = rp2.StateMachine(0, ws2812, freq=8_000_000, sideset_base=Pin(PIN_LEDBRANCH1))
-sm_ledbranch1.restart()
+#sm_ledbranch2 = rp2.StateMachine(1, ws2812, freq=8_000_000, sideset_base=Pin(PIN_LEDBRANCH2))
 
 # Start the StateMachine, it will wait for data on its FIFO.
 sm_ledbranch1.active(1)
+#sm_ledbranch2.active(1)
 ar_ledbranch1 = array.array("I", [0 for _ in range(NUM_LEDBRANCH1)])
-ar_flicker1 = array.array("I", [0 for _ in range(NUM_LEDBRANCH1)])
+ar_flicker = array.array("I", [0 for _ in range(NUM_LEDBRANCH1)])
+#ar_ledbranch2 = array.array("I", [0 for _ in range(NUM_LEDBRANCH2)])
 lights_off()
 
 
@@ -252,17 +269,15 @@ while True:
             client.publish(pub_topic, pub_msg)
             last_message = time.time()
             counter += 1
-            
-            
+            print(str(LED_MODE))
+        
+            if LED_STATE == 1 and LED_MODE == 1:
+                print("hello i am flicker")
+                flicker_lights()
+            if LED_STATE == 1 and LED_MODE == 0:
+                print("hello i am solid")
     except OSError as e:
         restart_and_reconnect()
-    
-    if LED_STATE == 1 and LED_MODE == 1:
-        print("I am in the right state")
-        flicker_lights()
-        
-    if LED_STATE == 0:
-        print("lights_off")
-        
+
     
         

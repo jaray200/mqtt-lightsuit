@@ -1,5 +1,5 @@
-firstname = 'Apple'
-lastname = 'Guillory'
+firstname = 'Sandwich'
+lastname = 'Sign'
 idnumber = '1'
 ssidhome = 'NESsy'
 pwhome = 'g1r4ff3s'
@@ -26,4 +26,4 @@ secrets = {
     'subtopic1' : bytes(subtopic1, 'utf8'),
     'subtopic2' : bytes(subtopic2, 'utf8'),
     'pubtopic' : bytes(pubtopic, 'utf8')
-    }                              
+    }                 
